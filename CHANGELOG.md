@@ -8,6 +8,9 @@
 - **Progress Monitoring**: Added a dedicated progress bar and scrolling log console directly underneath the rendering tools so users can see exactly what FFmpeg is doing in real-time.
 - **State Persistence**: The software now automatically creates a `bezel_settings.json` file. It permanently remembers the last `initial_dir` locations you used when opening or saving media/presets, drastically speeding up repetitive workflows.
 - **"Buy Me A Coffee" & QR Integration**: Added top-right header buttons. The text button opens a browser link, and the QR button opens a perfectly scaled, borderless image popup for easy scanning.
+- **Visual Colorimeter Calibration**: Implemented a comprehensive tool to generate a mathematical `gradient_morals_calibrator.png` 0-255 isolation track, alongside a new UI modal for inputting visually mapped RGB/Luma steps to sync uncalibrated monitors against a physical baseline.
+- **Advanced Grading Interpolation**: Attached Gamma (midtones), Brightness (black floor), and Saturation sliders to each monitor profile in the UI.
+- **Core Rendering Math**: Integrated the subjective data profiles dynamically into FFmpeg's `eq` and `colorchannelmixer` filters, and replicated identical processing natively in Pillow `Image.point()` and `ImageEnhance` modules for static image exports.
 
 ### Changed (Design & UI Improvements)
 - **Rebranding**: Changed core application name from `BezelCorrect` to **OmniScreen Forge**.

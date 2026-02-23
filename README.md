@@ -15,6 +15,7 @@ When you have a 32-inch 4K monitor next to a 24-inch 1080p monitor, simply telli
 - **Visual Desktop Layout Matrix**: A 2D canvas where you can freely drag around representations of your monitors to match their physical real-world positions. You can also drag their corners to adjust their physical sizes.
 - **Dynamic PPI Calculation Engine**: The program calculates the exact Pixels Per Inch (PPI) for every assigned screen, establishing a master scaling baseline to equalize the video/image.
 - **FFmpeg & PIL Subsystems**: It seamlessly maps videos using an asynchronous `subprocess` FFmpeg routine ensuring flawless frame-rates, and processes static images natively using Python's Pillow imaging library.
+- **Visual Colorimeter & Advanced Grading**: Generate a mathematical gradient calibrator to visually match RGB profiles across mismatched monitors, perfectly syncing their output via FFmpeg `colorchannelmixer` matrices and `ImageEnhance` operations. Includes advanced control over Gamma curve bending, Brightness offsets, and Saturation.
 - **Automated Parameter Extraction**: It automatically pulls the structural native resolution and X/Y OS coordinates directly from `screeninfo` without user intervention.
 - **State Persistence**: Remembers your designated input/output media locations and interface presets entirely via standard JSON loading.
 - **Asynchronous Rendering**: An integrated processing queue ensures UI responsiveness even while massive 4K video streams are re-transcoded in the background.
