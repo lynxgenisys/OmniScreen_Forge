@@ -22,6 +22,10 @@ When you have a 32-inch 4K monitor next to a 24-inch 1080p monitor, simply telli
 ## Video Tutorial
 *(Tutorial video link will be added here!)*
 
+Before and after video- showcasing the before and after of various backgrounds, on my personal setup... tge whole reason I created this in the first place!
+
+https://youtu.be/CO36Bm-emIM
+
 ## Basic Usage Guide
 1. **Load Media**: Select an MP4, GIF, JPEG, or PNG file utilizing the "Browse Media..." field.
 2. **Define Screens**: Click "Auto-Detect Monitors" to instantly pull the screen profiles provided by Windows.
