@@ -27,9 +27,30 @@ Before and after video- showcasing the before and after of various backgrounds, 
 
 [![OmniScreen Forge Video Tutorial](https://img.youtube.com/vi/CO36Bm-emIM/maxresdefault.jpg)](https://youtu.be/CO36Bm-emIM "Click to Watch!")
 
-## Basic Usage Guide
-1. **Load Media**: Select an MP4, GIF, JPEG, or PNG file utilizing the "Browse Media..." field.
-2. **Define Screens**: Click "Auto-Detect Monitors" to instantly pull the screen profiles provided by Windows.
-3. **Calibrate Dimensions**: For each screen row, determine the exact physical diagonal screen size (in inches, such as 31.5, 27.0, etc.)
-4. **Arrange Layout**: Look at the "2D Layout Canvas" on the right side. Drag the monitor blocks to match exactly how they are arranged on your desk. Ensure their relative sizes intuitively look correct based on your physical inputs.
-5. **Render Engine**: Click the purple "Render Media!" button. The log window will display progress, and a prompt will notify you when the asset is finalized. Right click your desktop and set the resulting image/video to "Span".
+## Comprehensive Usage Guide
+
+### 1. Initial Setup & Layout Configuration
+1. **Load Media**: Select an MP4, GIF, JPEG, or PNG file utilizing the "Browse Media..." button. **Pro-Tip**: OmniScreen Forge automatically detects your active Windows Desktop Wallpaper on boot and pre-fills this path to save you time!
+2. **Define Screens**: Click "Auto-Detect Monitors" to instantly pull the screen profiles (Resolution & OS Coordinates) directly from Windows. Alternatively, you can use "+ Add Monitor" to manually input custom screens.
+3. **Calibrate Dimensions**: For each monitor listed on the left, you MUST input the exact physical diagonal screen size in inches (e.g., 27.0, 31.5). This is the core variable the engine uses to calculate physical pixel density (PPI) disparities.
+4. **Arrange Layout (The 2D Canvas)**: Look at the "2D Layout Canvas" on the right. 
+    - **Click & Drag** the monitor blocks to match exactly how they are grouped on your physical desk.
+    - **Drag the bottom-right corner** of a block to visually resize its physical diagonal, which instantly updates the math on the left panel.
+    - **Bezel Gap**: Use the slider to inject empty physical inches between screens, ensuring the image perfectly bridges monitors without "eating" parts of the picture behind the plastic frames.
+
+### 2. Visual Colorimeter & Monitor Calibration
+Mismatched monitors often display colors drastically differently. Use the "Color Calibration" suite to align them:
+1. **Generate a Reference Image**: Click *2. Generate Rich Color Gradient*. This automatically paints a mathematically perfect 0-255 RGB & Luma sweeping reference image and saves it to your folder.
+2. **Launch Live Interactive Previews**: Clicking this button will ask for a reference image (select the gradient you just generated, or your wallpaper). The app will spawn a perfectly scaled, individual replica of that image floating exactly in the center of every physical monitor you own.
+3. **Adjust & Interpolate**: 
+    - Adjust the Jog-Wheels for Gray (Luma), Red, Green, and Blue for any monitors that look "off" compared to your best screen.
+    - Expand the `Advanced` section to tweak the core Gamut (midtones), Brightness offset (black floors), and Saturation.
+    - **Real-Time Magic**: As you drag *any* slider or type *any* number into the boxes, the Live Preview on that specific monitor pushes updates instantly using Numpy array math, allowing you to perfectly color-match your displays by eye in real-time.
+4. **Save Your Preset**: Once your layout and colors are perfect, hit "Save JSON Preset" on the main GUI. You will never have to calibrate this specific layout again!
+
+### 3. Rendering & Output
+1. **Include Source Audio**: Ensure this is checked if you are processing a video file and want the output to retain the original soundtrack.
+2. **Select Output Format**: Use the dropdown next to the render button to select your desired output container (`.mp4`, `.gif`, `.png`, etc.). The app dynamically updates available formats based on your input media type.
+3. **Render Media!**: Click the purple render button. 
+    - FFmpeg instances are completely multithreaded. You can monitor the direct FFmpeg output in the scrolling log console natively within the app.
+    - Once finished, right-click your Windows Desktop -> Personalize -> Background, select your new image/video, and set the "Choose a fit" option to **Span**. Your media is now perfectly mapping your physical reality!
