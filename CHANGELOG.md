@@ -1,6 +1,6 @@
 # OmniScreen Forge Changelog
 
-## [1.1.0] - GUI Style Update
+## [2.1] - GUI Style Update
 
 ### Added
 - **Help Menu**: Added a top navigation menu bar containing `Changelog` and `About` popup dialogues.
@@ -9,6 +9,9 @@
 - **State Persistence**: The software now automatically creates a `bezel_settings.json` file. It permanently remembers the last `initial_dir` locations you used when opening or saving media/presets, drastically speeding up repetitive workflows.
 - **"Buy Me A Coffee" & QR Integration**: Added top-right header buttons. The text button opens a browser link, and the QR button opens a perfectly scaled, borderless image popup for easy scanning.
 - **Visual Colorimeter Calibration**: Implemented a comprehensive tool to generate a mathematical `gradient_morals_calibrator.png` 0-255 isolation track, alongside a new UI modal for inputting visually mapped RGB/Luma steps to sync uncalibrated monitors against a physical baseline.
+- **Live Interactive Previews**: Added a "Launch Live Previews" system. When activated, it spawns a perfectly scaled, individual window onto every physical monitor you own, displaying a cloned reference image.
+- **Real-Time Calibration Iteration**: The Live Previews are directly mathematically bound to the GUI's RGB/Gamma Jog Wheels. As you drag sliders, the Live Preview on that specific monitor updates the RGB array instantly using Numpy math, completely eliminating the need to render test images to see color adjustments.
+- **Active System Wallpaper Detection**: The application now natively poles the Windows System Parameters API (`SPI_GETDESKWALLPAPER`) on boot. Instead of forcing you to hunt for your wallpaper, it immediately pre-populates the Input Media path with your currently active desktop background, dramatically speeding up calibration workflows.
 - **Advanced Grading Interpolation**: Attached Gamma (midtones), Brightness (black floor), and Saturation sliders to each monitor profile in the UI.
 - **Core Rendering Math**: Integrated the subjective data profiles dynamically into FFmpeg's `eq` and `colorchannelmixer` filters, and replicated identical processing natively in Pillow `Image.point()` and `ImageEnhance` modules for static image exports.
 

@@ -15,7 +15,7 @@ import subprocess
 # --- Data Structures ---
 
 class MonitorConfig:
-    def __init__(self, name="Monitor", diag=24.0, res_w=1920, res_h=1080, x=0.0, y=0.0, os_x=0, os_y=0, cal_gray=5.0, cal_r=5.0, cal_g=5.0, cal_b=5.0, gamma=1.0, brightness=0.0, saturation=1.0):
+    def __init__(self, name="Monitor", diag=24.0, res_w=1920, res_h=1080, x=0.0, y=0.0, os_x=0, os_y=0, cal_gray=1.0, cal_r=1.0, cal_g=1.0, cal_b=1.0, gamma=1.0, brightness=0.0, saturation=1.0):
         self.name = name
         self.diag = diag
         self.res_w = res_w
@@ -58,10 +58,10 @@ class MonitorConfig:
             "y": self.y,
             "os_x": self.os_x,
             "os_y": self.os_y,
-            "cal_gray": getattr(self, "cal_gray", 5.0),
-            "cal_r": getattr(self, "cal_r", 5.0),
-            "cal_g": getattr(self, "cal_g", 5.0),
-            "cal_b": getattr(self, "cal_b", 5.0),
+            "cal_gray": getattr(self, "cal_gray", 1.0),
+            "cal_r": getattr(self, "cal_r", 1.0),
+            "cal_g": getattr(self, "cal_g", 1.0),
+            "cal_b": getattr(self, "cal_b", 1.0),
             "gamma": getattr(self, "gamma", 1.0),
             "brightness": getattr(self, "brightness", 0.0),
             "saturation": getattr(self, "saturation", 1.0)
@@ -70,17 +70,19 @@ class MonitorConfig:
     @classmethod
     def from_dict(cls, data):
         if 'offset_y' in data: del data['offset_y']
-        if 'x' not in data: data['x'] = 0.0
-        if 'y' not in data: data['y'] = 0.0
-        if 'os_x' not in data: data['os_x'] = 0
-        if 'os_y' not in data: data['os_y'] = 0
-        if 'cal_gray' not in data: data['cal_gray'] = 5.0
-        if 'cal_r' not in data: data['cal_r'] = 5.0
-        if 'cal_g' not in data: data['cal_g'] = 5.0
-        if 'cal_b' not in data: data['cal_b'] = 5.0
-        if 'gamma' not in data: data['gamma'] = 1.0
-        if 'brightness' not in data: data['brightness'] = 0.0
-        if 'saturation' not in data: data['saturation'] = 1.0
+        # Remove old calibration values if they exist in the loaded data
+        data.pop('cal_gray', None)
+        data.pop('cal_r', None)
+        data.pop('cal_g', None)
+        data.pop('cal_b', None)
+
+        data.setdefault('x', 0.0)
+        data.setdefault('y', 0.0)
+        data.setdefault('os_x', 0)
+        data.setdefault('os_y', 0)
+        data.setdefault('gamma', 1.0)
+        data.setdefault('brightness', 0.0)
+        data.setdefault('saturation', 1.0)
         return cls(**data)
 
 # --- GUI Application ---
@@ -222,6 +224,22 @@ class OmniScreenForgeApp:
                 self.auto_detect_monitors()
         else:
             self.auto_detect_monitors()
+            
+        # Quality of Life feature: Pre-fill the input file with the user's current desktop wallpaper
+        self.try_load_current_wallpaper()
+
+    def try_load_current_wallpaper(self):
+        try:
+            if os.name == 'nt':
+                import ctypes
+                SPI_GETDESKWALLPAPER = 0x0073
+                buffer = ctypes.create_unicode_buffer(512)
+                ctypes.windll.user32.SystemParametersInfoW(SPI_GETDESKWALLPAPER, 512, buffer, 0)
+                wallpaper_path = buffer.value
+                if wallpaper_path and os.path.exists(wallpaper_path):
+                    self.input_file.set(wallpaper_path)
+        except Exception as e:
+            print(f"Failed to detect active wallpaper: {e}")
 
     def create_bordered_button(self, parent, text, command, **kwargs):
         # Override bg to match parent mostly
@@ -585,66 +603,161 @@ class OmniScreenForgeApp:
     def generate_calibration_image(self):
         try:
             from PIL import Image, ImageDraw, ImageFont
+            import numpy as np
             WIDTH = 3840
             HEIGHT = 2160
-            STEPS = 10
-            BG_COLOR = (20, 20, 20)
-            TEXT_COLOR = (255, 255, 255)
             OUTPUT_FILENAME = "gradient_morals_calibrator.png"
 
-            img = Image.new('RGB', (WIDTH, HEIGHT), color=BG_COLOR)
+            # Create smooth multi-channel gradients
+            # We will divide the vertical space into 4 main bands: Gray, Red, Green, Blue
+            band_h = HEIGHT // 4
+            
+            # Create a 0-255 sweep across the width
+            sweep = np.linspace(0, 255, WIDTH, dtype=np.uint8)
+            sweep_2d = np.tile(sweep, (band_h, 1))
+            
+            # Master array
+            img_arr = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
+            
+            # Gray Band (0 to band_h)
+            img_arr[0:band_h, :, 0] = sweep_2d
+            img_arr[0:band_h, :, 1] = sweep_2d
+            img_arr[0:band_h, :, 2] = sweep_2d
+            
+            # Red Band
+            img_arr[band_h:band_h*2, :, 0] = sweep_2d
+            
+            # Green Band
+            img_arr[band_h*2:band_h*3, :, 1] = sweep_2d
+            
+            # Blue Band
+            img_arr[band_h*3:HEIGHT, :, 2] = sweep_2d
+            
+            img = Image.fromarray(img_arr, mode='RGB')
             draw = ImageDraw.Draw(img)
-
+            
             try:
                 font = ImageFont.truetype("arial.ttf", size=60)
+                font_small = ImageFont.truetype("arial.ttf", size=40)
             except IOError:
                 font = ImageFont.load_default()
-
-            row_height = HEIGHT // 5
-            step_width = WIDTH // STEPS
-
-            rows = [
-                ("GRAY (Luma)", lambda v: (v, v, v)),
-                ("RED Channel", lambda v: (v, 0, 0)),
-                ("GREEN Channel", lambda v: (0, v, 0)),
-                ("BLUE Channel", lambda v: (0, 0, v)),
-            ]
-
-            current_y = row_height // 2
-
-            for label_text, color_func in rows:
-                draw.text((10, current_y - 70), label_text, font=font, fill=TEXT_COLOR)
-                for i in range(STEPS):
-                    val = int((i / (STEPS - 1)) * 255)
-                    step_color = color_func(val)
-                    x1 = i * step_width
-                    y1 = current_y
-                    x2 = x1 + step_width - 5
-                    y2 = y1 + row_height - 20
-                    draw.rectangle([x1, y1, x2, y2], fill=step_color)
-
-                    text = str(i)
-                    bbox = draw.textbbox((0, 0), text, font=font)
-                    text_width = bbox[2] - bbox[0]
-                    text_height = bbox[3] - bbox[1]
-                    text_x = x1 + (step_width / 2) - (text_width / 2)
-                    text_y = y1 + (row_height / 2) - (text_height / 2)
-                    
-                    outline_color = (0,0,0) if val > 128 else (255,255,255)
-                    draw.text((text_x-1, text_y), text, font=font, fill=outline_color)
-                    draw.text((text_x+1, text_y), text, font=font, fill=outline_color)
-                    draw.text((text_x, text_y-1), text, font=font, fill=outline_color)
-                    draw.text((text_x, text_y+1), text, font=font, fill=outline_color)
-                    draw.text((text_x, text_y), text, font=font, fill=TEXT_COLOR)
-                current_y += row_height
+                font_small = ImageFont.load_default()
+                
+            labels = ["GRAY (Luma) 256-Level Sweep", "RED Channel 256-Level Sweep", "GREEN Channel 256-Level Sweep", "BLUE Channel 256-Level Sweep"]
+            
+            for i, label in enumerate(labels):
+                y_pos = i * band_h
+                # Background rect for text readability
+                draw.rectangle([10, y_pos + 10, 900, y_pos + 80], fill=(20, 20, 20))
+                draw.text((20, y_pos + 15), label, font=font, fill=(255, 255, 255))
+                
+                # Draw markers at 25%, 50%, 75%
+                for pct in [0.25, 0.50, 0.75]:
+                    mx = int(WIDTH * pct)
+                    draw.line([(mx, y_pos + band_h - 50), (mx, y_pos + band_h)], fill=(255, 255, 255), width=3)
+                    draw.text((mx - 30, y_pos + band_h - 100), f"{int(pct*100)}%", font=font_small, fill=(255,255,255))
 
             img.save(OUTPUT_FILENAME, quality=100)
-            messagebox.showinfo("Success", f"Calibration image generated successfully:\n{os.path.abspath(OUTPUT_FILENAME)}\n\nPlease span this image across all your monitors to begin calibration.")
+            messagebox.showinfo("Success", f"Rich Calibration image generated successfully:\n{os.path.abspath(OUTPUT_FILENAME)}\n\nPlease span this image across all your monitors, or use Live Previews.")
             
             if os.name == 'nt':
                 os.startfile(OUTPUT_FILENAME)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate calibration image:\n{str(e)}")
+
+    def generate_omni_grid(self):
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.patches as patches
+            import numpy as np
+
+            # --- Configuration ---
+            Resolution = 4096  # High res square image
+            Grid_Spacing = 16  # How many grid squares across
+            Line_Thickness = 2.0
+
+            # Colors (Cyberpunk Palette)
+            BG_COLOR = 'black'
+            GRID_COLOR = 'magenta'
+            ANGLE_COLOR = 'cyan'
+            CIRCLE_COLOR = 'lime' # Using lime for bright green
+
+            # --- Setup ---
+            fig, ax = plt.subplots(figsize=(20, 20), dpi=Resolution/20)
+            fig.patch.set_facecolor(BG_COLOR)
+            ax.set_facecolor(BG_COLOR)
+
+            # Ensure equal aspect ratio (squares look square)
+            ax.set_aspect('equal')
+
+            # Set limits and remove standard axes/ticks
+            ax.set_xlim(0, Grid_Spacing)
+            ax.set_ylim(0, Grid_Spacing)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+            # --- 1. The Magenta Grid & Numbering ---
+            for i in range(Grid_Spacing + 1):
+                # Vertical lines
+                ax.axvline(i, color=GRID_COLOR, linewidth=Line_Thickness/2, alpha=0.5)
+                # Horizontal lines
+                ax.axhline(i, color=GRID_COLOR, linewidth=Line_Thickness/2, alpha=0.5)
+                
+                # Numbering (1,1 is bottom left)
+                # Bottom edge numbers
+                if i > 0: ax.text(i - 0.5, 0.2, str(i), color=GRID_COLOR, ha='center', fontsize=12, fontweight='bold')
+                # Left edge numbers
+                if i > 0: ax.text(0.2, i - 0.5, str(i), color=GRID_COLOR, va='center', fontsize=12, fontweight='bold')
+
+
+            # --- 2. The Cyan Radial Angle Lines ---
+            angles = [15, 30, 45, 60, 75, 90]
+            corners = [(0,0), (Grid_Spacing, 0), (0, Grid_Spacing), (Grid_Spacing, Grid_Spacing)]
+
+            for cx, cy in corners:
+                for angle in angles:
+                    # Calculate end points based on which corner we are in
+                    if cx == 0 and cy == 0: # Bottom-Left
+                        rad = np.radians(angle)
+                        ex, ey = Grid_Spacing * 2 * np.cos(rad), Grid_Spacing * 2 * np.sin(rad)
+                    elif cx == Grid_Spacing and cy == 0: # Bottom-Right
+                        rad = np.radians(180 - angle)
+                        ex, ey = cx + Grid_Spacing * 2 * np.cos(rad), Grid_Spacing * 2 * np.sin(rad)
+                    elif cx == 0 and cy == Grid_Spacing: # Top-Left
+                        rad = np.radians(-angle)
+                        ex, ey = Grid_Spacing * 2 * np.cos(rad), cy + Grid_Spacing * 2 * np.sin(rad)
+                    elif cx == Grid_Spacing and cy == Grid_Spacing: # Top-Right
+                         rad = np.radians(180 + angle)
+                         ex, ey = cx + Grid_Spacing * 2 * np.cos(rad), cy + Grid_Spacing * 2 * np.sin(rad)
+                         
+                    ax.plot([cx, ex], [cy, ey], color=ANGLE_COLOR, linewidth=Line_Thickness, linestyle='--')
+
+
+            # --- 3. The Green Concentric Circles ---
+            center_x, center_y = Grid_Spacing / 2, Grid_Spacing / 2
+            max_radius = Grid_Spacing * 0.7
+            num_circles = 8
+
+            for i in range(1, num_circles + 1):
+                radius = (i / num_circles) * max_radius
+                circle = patches.Circle((center_x, center_y), radius, fill=False, edgecolor=CIRCLE_COLOR, linewidth=Line_Thickness)
+                ax.add_patch(circle)
+
+            # --- Final Formatting and Save ---
+            # Remove white border around the plot area
+            plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+            OUTPUT_FILENAME = 'Omni_Calibration_Grid.png'
+            plt.savefig(OUTPUT_FILENAME, facecolor=BG_COLOR, bbox_inches='tight', pad_inches=0)
+            plt.close(fig) # Prevent memory leak and plot display
+            
+            messagebox.showinfo("Success", f"Omni Calibration Grid generated successfully:\n{os.path.abspath(OUTPUT_FILENAME)}\n\nPlease span this image across all your monitors to begin visual alignment.")
+            
+            if os.name == 'nt':
+                os.startfile(OUTPUT_FILENAME)
+        except ImportError:
+            messagebox.showerror("Error", "Missing required libraries. Please ensure matplotlib and numpy are installed.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate Omni Grid:\n{str(e)}")
 
     def open_calibration_ui(self):
         if len(self.monitors) < 2:
@@ -660,21 +773,15 @@ class OmniScreenForgeApp:
         lbl = tk.Label(top, text="Visual Colorimeter", font=("Segoe UI", 16, "bold"), fg="#00A86B", bg="#050505")
         lbl.pack(pady=(15, 5))
         
-        desc = tk.Label(top, text="Match the visual appearance of other monitors to the baseline.", font=("Segoe UI", 10), fg="#ECF0F1", bg="#050505")
+        desc = tk.Label(top, text="Adjust the visual appearance of each monitor independently until they match the reference.", font=("Segoe UI", 10), fg="#ECF0F1", bg="#050505")
         desc.pack(pady=(0, 15))
 
         btn_frame = ttk.Frame(top)
         btn_frame.pack(fill=tk.X, padx=20, pady=5)
-        self.create_bordered_button(btn_frame, text="1. Generate & Span Calibration Image", command=self.generate_calibration_image, bg="#1A1A1A").pack(pady=10)
-
-        base_frame = ttk.Frame(top)
-        base_frame.pack(fill=tk.X, padx=20, pady=10)
-        ttk.Label(base_frame, text="Baseline Monitor:").pack(side=tk.LEFT, padx=5)
-        baseline_cb = ttk.Combobox(base_frame, values=[f"Screen {i+1}" for i in range(len(self.monitors))], state="readonly", width=15)
-        baseline_cb.current(0)
-        baseline_cb.pack(side=tk.LEFT, padx=5)
-        
-        ttk.Label(base_frame, text="Look at Step 5 on this screen to compare others.").pack(side=tk.LEFT, padx=10)
+        self.create_bordered_button(btn_frame, text="1. Generate & Span Color Calibrator", command=self.generate_calibration_image, bg="#1A1A1A").grid(row=0, column=0, padx=(0, 5), sticky="ew")
+        self.create_bordered_button(btn_frame, text="2. Generate Omni Alignment Grid", command=self.generate_omni_grid, bg="#1A1A1A").grid(row=0, column=1, padx=(5, 0), sticky="ew")
+        btn_frame.columnconfigure(0, weight=1)
+        btn_frame.columnconfigure(1, weight=1)
 
         config_frame = ttk.Frame(top)
         config_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
@@ -692,100 +799,239 @@ class OmniScreenForgeApp:
         
         self.cal_vars = {}
         
-        def refresh_ui(*args):
-            for widget in scrollable_frame.winfo_children():
-                widget.destroy()
-                
-            base_idx = baseline_cb.current()
+        def make_rounder(var, mon_idx):
+            return lambda v, _v=var, idx=mon_idx: [_v.set(round(float(v), 2)), self.update_preview(idx)]
             
-            for i, m in enumerate(self.monitors):
-                if i == base_idx:
-                    continue
-                
-                f = ttk.LabelFrame(scrollable_frame, text=f"Screen {i+1} ({m.name}) Match Values", padding=10)
-                f.pack(fill=tk.X, padx=5, pady=5)
-                
-                ttk.Label(f, text="To match Baseline Step 5, I have to look at this Step on this Screen:").grid(row=0, column=0, columnspan=8, sticky="w", pady=(0, 5))
-                
-                if i not in self.cal_vars:
-                    self.cal_vars[i] = {
-                        'gray': tk.DoubleVar(value=getattr(m, 'cal_gray', 5.0)),
-                        'r': tk.DoubleVar(value=getattr(m, 'cal_r', 5.0)),
-                        'g': tk.DoubleVar(value=getattr(m, 'cal_g', 5.0)),
-                        'b': tk.DoubleVar(value=getattr(m, 'cal_b', 5.0)),
-                        'gamma': tk.DoubleVar(value=getattr(m, 'gamma', 1.0)),
-                        'bright': tk.DoubleVar(value=getattr(m, 'brightness', 0.0)),
-                        'sat': tk.DoubleVar(value=getattr(m, 'saturation', 1.0))
-                    }
-                    
-                ttk.Label(f, text="RGB Steps (0-9)").grid(row=1, column=0, columnspan=8, sticky="w", pady=(5, 0))
-                ttk.Label(f, text="GRAY:").grid(row=2, column=0, padx=5)
-                ttk.Entry(f, textvariable=self.cal_vars[i]['gray'], width=5).grid(row=2, column=1)
-                
-                ttk.Label(f, text="RED:").grid(row=2, column=2, padx=(15, 5))
-                ttk.Entry(f, textvariable=self.cal_vars[i]['r'], width=5).grid(row=2, column=3)
-                
-                ttk.Label(f, text="GREEN:").grid(row=2, column=4, padx=(15, 5))
-                ttk.Entry(f, textvariable=self.cal_vars[i]['g'], width=5).grid(row=2, column=5)
-                
-                ttk.Label(f, text="BLUE:").grid(row=2, column=6, padx=(15, 5))
-                ttk.Entry(f, textvariable=self.cal_vars[i]['b'], width=5).grid(row=2, column=7)
+        def make_rounder_3(var, mon_idx):
+            return lambda v, _v=var, idx=mon_idx: [_v.set(round(float(v), 3)), self.update_preview(idx)]
+            
+        def update_from_entry(*args, **kwargs):
+            idx = kwargs.get('idx')
+            if idx is not None:
+                self.update_preview(idx)
 
-                ttk.Label(f, text="Advanced Grading").grid(row=3, column=0, columnspan=8, sticky="w", pady=(10, 0))
+        for i, m in enumerate(self.monitors):
+            f = ttk.LabelFrame(scrollable_frame, text=f"Screen {i+1} ({m.name}) Adjustments", padding=10)
+            f.pack(fill=tk.X, padx=5, pady=5)
+            
+            self.cal_vars[i] = {
+                'gray': tk.DoubleVar(value=getattr(m, 'cal_gray', 1.0)),
+                'r': tk.DoubleVar(value=getattr(m, 'cal_r', 1.0)),
+                'g': tk.DoubleVar(value=getattr(m, 'cal_g', 1.0)),
+                'b': tk.DoubleVar(value=getattr(m, 'cal_b', 1.0)),
+                'gamma': tk.DoubleVar(value=getattr(m, 'gamma', 1.0)),
+                'bright': tk.DoubleVar(value=getattr(m, 'brightness', 0.0)),
+                'sat': tk.DoubleVar(value=getattr(m, 'saturation', 1.0))
+            }
                 
-                # Use Scale (Sliders) for intuitive control since these are more subjective parameters compared to the step matrix
-                row4 = tk.Frame(f, bg="#121212")
-                row4.grid(row=4, column=0, columnspan=8, sticky="ew", pady=(5, 5))
+            # Trace entry variables so typing numbers also drops a live preview update
+            for key, v in self.cal_vars[i].items():
+                v.trace_add("write", lambda *args, idx=i: update_from_entry(idx=idx))
                 
-                ttk.Label(row4, text="Gamma (Midtones 0.1 - 10):").grid(row=0, column=0, padx=(5, 5))
-                ttk.Scale(row4, from_=0.1, to=5.0, variable=self.cal_vars[i]['gamma'], orient=tk.HORIZONTAL, length=100).grid(row=0, column=1)
-                ttk.Label(row4, textvariable=self.cal_vars[i]['gamma']).grid(row=0, column=2, padx=(5, 15))
-                
-                ttk.Label(row4, text="Brightness Offset (-1.0 to 1.0):").grid(row=0, column=3, padx=(5, 5))
-                ttk.Scale(row4, from_=-1.0, to=1.0, variable=self.cal_vars[i]['bright'], orient=tk.HORIZONTAL, length=100).grid(row=0, column=4)
-                ttk.Label(row4, textvariable=self.cal_vars[i]['bright']).grid(row=0, column=5, padx=(5, 15))
-                
-                ttk.Label(row4, text="Saturation (0.0 to 3.0):").grid(row=0, column=6, padx=(5, 5))
-                ttk.Scale(row4, from_=0.0, to=3.0, variable=self.cal_vars[i]['sat'], orient=tk.HORIZONTAL, length=100).grid(row=0, column=7)
-                ttk.Label(row4, textvariable=self.cal_vars[i]['sat']).grid(row=0, column=8, padx=(5, 5))
+            # --- RGB / Luma Multipliers ---
+            row1 = tk.Frame(f, bg="#121212")
+            row1.grid(row=0, column=0, columnspan=8, sticky="ew", pady=(5, 5))
+            ttk.Label(row1, text="Channel Multipliers (0.0 - 3.0)", foreground="#00FFFF").grid(row=0, column=0, columnspan=12, sticky="w")
+            
+            # Gray
+            ttk.Label(row1, text="Gray:").grid(row=1, column=0, padx=(5, 5))
+            tk.Scale(row1, from_=0.0, to=3.0, variable=self.cal_vars[i]['gray'], orient=tk.HORIZONTAL, length=100, resolution=0.01, showvalue=0, bg="#121212", highlightthickness=0, troughcolor="#2A2A2A", command=make_rounder(self.cal_vars[i]['gray'], i)).grid(row=1, column=1)
+            ttk.Entry(row1, textvariable=self.cal_vars[i]['gray'], width=5).grid(row=1, column=2, padx=(5, 10))
+            
+            # Red
+            ttk.Label(row1, text="Red:").grid(row=1, column=3, padx=(5, 5))
+            tk.Scale(row1, from_=0.0, to=3.0, variable=self.cal_vars[i]['r'], orient=tk.HORIZONTAL, length=100, resolution=0.01, showvalue=0, bg="#121212", highlightthickness=0, troughcolor="#2A2A2A", command=make_rounder(self.cal_vars[i]['r'], i)).grid(row=1, column=4)
+            ttk.Entry(row1, textvariable=self.cal_vars[i]['r'], width=5).grid(row=1, column=5, padx=(5, 10))
+            
+            # Green
+            ttk.Label(row1, text="Green:").grid(row=1, column=6, padx=(5, 5))
+            tk.Scale(row1, from_=0.0, to=3.0, variable=self.cal_vars[i]['g'], orient=tk.HORIZONTAL, length=100, resolution=0.01, showvalue=0, bg="#121212", highlightthickness=0, troughcolor="#2A2A2A", command=make_rounder(self.cal_vars[i]['g'], i)).grid(row=1, column=7)
+            ttk.Entry(row1, textvariable=self.cal_vars[i]['g'], width=5).grid(row=1, column=8, padx=(5, 10))
+            
+            # Blue
+            ttk.Label(row1, text="Blue:").grid(row=1, column=9, padx=(5, 5))
+            tk.Scale(row1, from_=0.0, to=3.0, variable=self.cal_vars[i]['b'], orient=tk.HORIZONTAL, length=100, resolution=0.01, showvalue=0, bg="#121212", highlightthickness=0, troughcolor="#2A2A2A", command=make_rounder(self.cal_vars[i]['b'], i)).grid(row=1, column=10)
+            ttk.Entry(row1, textvariable=self.cal_vars[i]['b'], width=5).grid(row=1, column=11, padx=(5, 5))
 
-        refresh_ui()
-        baseline_cb.bind("<<ComboboxSelected>>", refresh_ui)
+            # --- Advanced Grading ---
+            row2 = tk.Frame(f, bg="#121212")
+            row2.grid(row=1, column=0, columnspan=8, sticky="ew", pady=(10, 5))
+            ttk.Label(row2, text="Advanced Grading", foreground="#FF00FF").grid(row=0, column=0, columnspan=9, sticky="w")
+            
+            # Gamma
+            ttk.Label(row2, text="Gamma (0.1-5.0):").grid(row=1, column=0, padx=(5, 5))
+            tk.Scale(row2, from_=0.1, to=5.0, variable=self.cal_vars[i]['gamma'], orient=tk.HORIZONTAL, length=120, resolution=0.01, showvalue=0, bg="#121212", highlightthickness=0, troughcolor="#2A2A2A", command=make_rounder(self.cal_vars[i]['gamma'], i)).grid(row=1, column=1)
+            ttk.Entry(row2, textvariable=self.cal_vars[i]['gamma'], width=5).grid(row=1, column=2, padx=(5, 15))
+            
+            # Brightness
+            ttk.Label(row2, text="Brightness (-1.0 to 1.0):").grid(row=1, column=3, padx=(5, 5))
+            tk.Scale(row2, from_=-1.0, to=1.0, variable=self.cal_vars[i]['bright'], orient=tk.HORIZONTAL, length=120, resolution=0.01, showvalue=0, bg="#121212", highlightthickness=0, troughcolor="#2A2A2A", command=make_rounder_3(self.cal_vars[i]['bright'], i)).grid(row=1, column=4)
+            ttk.Entry(row2, textvariable=self.cal_vars[i]['bright'], width=5).grid(row=1, column=5, padx=(5, 15))
+            
+            # Saturation
+            ttk.Label(row2, text="Saturation (0.0 to 3.0):").grid(row=1, column=6, padx=(5, 5))
+            tk.Scale(row2, from_=0.0, to=3.0, variable=self.cal_vars[i]['sat'], orient=tk.HORIZONTAL, length=120, resolution=0.01, showvalue=0, bg="#121212", highlightthickness=0, troughcolor="#2A2A2A", command=make_rounder(self.cal_vars[i]['sat'], i)).grid(row=1, column=7)
+            ttk.Entry(row2, textvariable=self.cal_vars[i]['sat'], width=5).grid(row=1, column=8, padx=(5, 5))
+
         
         def save_calibration():
-            base_idx = baseline_cb.current()
-            self.monitors[base_idx].cal_gray = 5.0
-            self.monitors[base_idx].cal_r = 5.0
-            self.monitors[base_idx].cal_g = 5.0
-            self.monitors[base_idx].cal_b = 5.0
-            self.monitors[base_idx].gamma = 1.0
-            self.monitors[base_idx].brightness = 0.0
-            self.monitors[base_idx].saturation = 1.0
-            
             for idx, vars_dict in self.cal_vars.items():
-                if idx == base_idx: continue
                 try:
-                    self.monitors[idx].cal_gray = max(0.1, min(9.0, float(vars_dict['gray'].get())))
-                    self.monitors[idx].cal_r = max(0.1, min(9.0, float(vars_dict['r'].get())))
-                    self.monitors[idx].cal_g = max(0.1, min(9.0, float(vars_dict['g'].get())))
-                    self.monitors[idx].cal_b = max(0.1, min(9.0, float(vars_dict['b'].get())))
+                    self.monitors[idx].cal_gray = max(0.0, min(3.0, float(vars_dict['gray'].get())))
+                    self.monitors[idx].cal_r = max(0.0, min(3.0, float(vars_dict['r'].get())))
+                    self.monitors[idx].cal_g = max(0.0, min(3.0, float(vars_dict['g'].get())))
+                    self.monitors[idx].cal_b = max(0.0, min(3.0, float(vars_dict['b'].get())))
                     
                     self.monitors[idx].gamma = round(float(vars_dict['gamma'].get()), 2)
-                    self.monitors[idx].brightness = round(float(vars_dict['bright'].get()), 2)
+                    self.monitors[idx].brightness = round(float(vars_dict['bright'].get()), 3)
                     self.monitors[idx].saturation = round(float(vars_dict['sat'].get()), 2)
                 except ValueError:
                     messagebox.showwarning("Input Error", f"Invalid values for Screen {idx+1}. Must be numbers.")
                     return
+            
+            self.close_live_previews()    
             self.save_settings()
             top.destroy()
-            messagebox.showinfo("Saved", "Color calibration values integrated into the setup.")
+            messagebox.showinfo("Saved", "Absolute Color Calibration profiles integrated and saved.")
 
+        # --- Base Live Preview Setup ---
+        self.preview_windows = {}
+        self.preview_images = {}
+        self.preview_tk_images = {}
+        self.preview_labels = {}
+        self.base_reference_image = None
+        
         bot_frame = ttk.Frame(top)
         bot_frame.pack(fill=tk.X, padx=20, pady=15)
         
+        self.create_bordered_button(bot_frame, text="3. Launch Live Interactive Previews", command=self.launch_live_previews, bg="#00A86B", fg="#050505").pack(side=tk.LEFT, padx=5)
+        
         self.create_bordered_button(bot_frame, text="Save Calibration", command=save_calibration, bg="#00A86B", fg="#050505", border_color="#00A86B").pack(side=tk.RIGHT, padx=5)
-        self.create_bordered_button(bot_frame, text="Cancel", command=top.destroy).pack(side=tk.RIGHT, padx=5)
+        self.create_bordered_button(bot_frame, text="Close", command=lambda: [self.close_live_previews(), top.destroy()]).pack(side=tk.RIGHT, padx=5)
+        
+        # Override the native window close (X button) to clean up previews
+        top.protocol("WM_DELETE_WINDOW", lambda: [self.close_live_previews(), top.destroy()])
 
+    def launch_live_previews(self):
+        from tkinter import filedialog
+        from PIL import Image, ImageTk
+        
+        if self.preview_windows:
+            messagebox.showinfo("Info", "Live Previews are already running.")
+            return
+            
+        filepath = filedialog.askopenfilename(
+            title="Select Reference Image for Live Previews",
+            filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.bmp;*.webp")]
+        )
+        if not filepath:
+            return
+            
+        try:
+            # We map the chosen image exactly as the render engine does
+            img = Image.open(filepath).convert('RGB')
+            self.base_reference_image = img
+            
+            # Spawn a standard window on every single monitor
+            for idx, mon in enumerate(self.monitors):
+                
+                # Scale the preview image to 70% of the native resolution to fit cleanly 
+                # in a window without hiding taskbars or desktop features
+                scale_factor = 0.70
+                pw_w = max(100, int(mon.res_w * scale_factor))
+                pw_h = max(100, int(mon.res_h * scale_factor))
+                
+                # Directly resize the full original image to the preview window size
+                seg_native = img.resize((pw_w, pw_h), Image.Resampling.LANCZOS)
+                
+                self.preview_images[idx] = seg_native
+                
+                # Create the Tkinter Window
+                pw = tk.Toplevel(self.root)
+                pw.title(f"Live Preview - Screen {idx+1}")
+                self.apply_window_dark_titlebar(pw)
+                
+                # Center the window logically on the respective OS Virtual Display
+                win_x = mon.os_x + (mon.res_w - pw_w) // 2
+                win_y = mon.os_y + (mon.res_h - pw_h) // 2
+                pw.geometry(f"{pw_w}x{pw_h}+{win_x}+{win_y}")
+                pw.configure(bg="black")
+                
+                # Label to hold the live image
+                lbl = tk.Label(pw, bg="black", borderwidth=0, highlightthickness=0)
+                lbl.pack(fill=tk.BOTH, expand=True)
+                
+                self.preview_windows[idx] = pw
+                self.preview_labels[idx] = lbl
+                
+                # Push the initial colored image
+                self.update_preview(idx)
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to initialize Live Previews:\n{str(e)}")
+            self.close_live_previews()
+
+    def update_preview(self, mon_idx):
+        if not self.preview_windows or mon_idx not in self.preview_images:
+            return
+            
+        from PIL import Image, ImageTk, ImageEnhance
+        import numpy as np
+        
+        try:
+            # Grab the clean, unedited cropped slice for this monitor
+            clean_img = self.preview_images[mon_idx]
+            
+            # Pull the LIVE values straight from the UI Var dictionaries we bound earlier
+            gray = float(self.cal_vars[mon_idx]['gray'].get())
+            r = float(self.cal_vars[mon_idx]['r'].get())
+            g = float(self.cal_vars[mon_idx]['g'].get())
+            b = float(self.cal_vars[mon_idx]['b'].get())
+            
+            gamma = float(self.cal_vars[mon_idx]['gamma'].get())
+            bright = float(self.cal_vars[mon_idx]['bright'].get())
+            sat = float(self.cal_vars[mon_idx]['sat'].get())
+            
+            # Apply exactly identical math as the Engine Render logic
+            edited_img = clean_img.copy()
+            
+            if abs(sat - 1.0) > 0.02:
+                edited_img = ImageEnhance.Color(edited_img).enhance(sat)
+                
+            if abs(bright) > 0.02:
+                edited_img = ImageEnhance.Brightness(edited_img).enhance(1.0 + bright)
+                
+            if any(abs(m - 1.0) > 0.02 for m in [gray, r, g, b, gamma]):
+                arr = np.array(edited_img, dtype=np.float32)
+                
+                arr[:, :, 0] *= (gray * r)
+                arr[:, :, 1] *= (gray * g)
+                arr[:, :, 2] *= (gray * b)
+                
+                if abs(gamma - 1.0) > 0.02:
+                    arr = 255.0 * np.power((arr / 255.0).clip(0, 1), 1.0 / gamma)
+                    
+                np.clip(arr, 0, 255, out=arr)
+                edited_img = Image.fromarray(arr.astype(np.uint8))
+                
+            # Convert to Tkinter PhotoImage and push to the on-screen label instantly
+            tk_img = ImageTk.PhotoImage(image=edited_img)
+            self.preview_tk_images[mon_idx] = tk_img # Maintain reference to avoid garbage collection
+            self.preview_labels[mon_idx].configure(image=tk_img)
+            
+        except Exception as e:
+            # Silently catch math errors during typing/sliding to prevent crashing the UI loop
+            pass
+
+    def close_live_previews(self):
+        for pw in self.preview_windows.values():
+            pw.destroy()
+        self.preview_windows.clear()
+        self.preview_images.clear()
+        self.preview_tk_images.clear()
+        self.preview_labels.clear()
+        self.base_reference_image = None
+        
     def show_instructions(self):
         top = tk.Toplevel(self.root)
         top.title("Instructions - OmniScreen Forge")
@@ -848,7 +1094,7 @@ class OmniScreenForgeApp:
         
         lines = [
             "Universal Multi-Monitor Rescaler",
-            "Version 1.1.0",
+            "Version 2.1",
             "Developed specifically to solve physical",
             "monitor dimension disparities."
         ]
@@ -1269,11 +1515,11 @@ class OmniScreenForgeApp:
             crop = f"crop={crop_w}:{crop_h}:{crop_x}:{crop_y}"
             scale = f"scale={mon.res_w}:{mon.res_h}"
             
-            # --- Gradient Morals Visual Calibration Math ---
-            m_gray = getattr(mon, 'cal_gray', 5.0) / 5.0
-            m_r = getattr(mon, 'cal_r', 5.0) / 5.0
-            m_g = getattr(mon, 'cal_g', 5.0) / 5.0
-            m_b = getattr(mon, 'cal_b', 5.0) / 5.0
+            # --- Absolute Color Calibration Math ---
+            m_gray = getattr(mon, 'cal_gray', 1.0)
+            m_r = getattr(mon, 'cal_r', 1.0)
+            m_g = getattr(mon, 'cal_g', 1.0)
+            m_b = getattr(mon, 'cal_b', 1.0)
             
             p_gamma = getattr(mon, 'gamma', 1.0)
             p_bright = getattr(mon, 'brightness', 0.0)
@@ -1443,11 +1689,11 @@ class OmniScreenForgeApp:
                 seg = mapped_img.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
                 seg_native = seg.resize((mon.res_w, mon.res_h), Image.Resampling.LANCZOS)
                 
-                # --- Gradient Morals Visual Calibration Math (PIL) ---
-                m_gray = getattr(mon, 'cal_gray', 5.0) / 5.0
-                m_r = getattr(mon, 'cal_r', 5.0) / 5.0
-                m_g = getattr(mon, 'cal_g', 5.0) / 5.0
-                m_b = getattr(mon, 'cal_b', 5.0) / 5.0
+                # --- Absolute Color Calibration Math (PIL) ---
+                m_gray = getattr(mon, 'cal_gray', 1.0)
+                m_r = getattr(mon, 'cal_r', 1.0)
+                m_g = getattr(mon, 'cal_g', 1.0)
+                m_b = getattr(mon, 'cal_b', 1.0)
                 
                 p_gamma = getattr(mon, 'gamma', 1.0)
                 p_bright = getattr(mon, 'brightness', 0.0)
@@ -1463,20 +1709,28 @@ class OmniScreenForgeApp:
                     # FFmpeg brightness is -1.0 to 1.0. PIL is a multiplier where 1.0 is original.
                     # We map FFmpeg's additive offset into a rough PIL multiplier (1.0 + brightness).
                     enhancer = ImageEnhance.Brightness(seg_native)
-                    seg_native = enhancer.enhance(max(0.0, 1.0 + p_bright))
+                    seg_native = enhancer.enhance(1.0 + p_bright)
                     
-                if abs(p_gamma - 1.0) > 0.02:
-                    # Apply gamma correction: V_out = 255 * (V_in / 255) ^ (1 / gamma)
-                    inv_gamma = 1.0 / p_gamma
-                    seg_native = seg_native.point(lambda i: int(255 * ((i / 255.0) ** inv_gamma)))
-                
-                if any(abs(m - 1.0) > 0.02 for m in [m_gray, m_r, m_g, m_b]):
-                    r, g, b = seg_native.split()
-                    r = r.point(lambda i: min(255, int(i * m_gray * m_r)))
-                    g = g.point(lambda i: min(255, int(i * m_gray * m_g)))
-                    b = b.point(lambda i: min(255, int(i * m_gray * m_b)))
-                    seg_native = Image.merge('RGB', (r, g, b))
-                
+                if any(abs(m - 1.0) > 0.02 for m in [m_gray, m_r, m_g, m_b, p_gamma]):
+                    # Apply raw RGB channel math and Gamma on a per-pixel array basis
+                    import numpy as np
+                    
+                    rr = m_gray * m_r
+                    gg = m_gray * m_g
+                    bb = m_gray * m_b
+                    
+                    arr = np.array(seg_native, dtype=np.float32)
+                    arr[:, :, 0] *= rr
+                    arr[:, :, 1] *= gg
+                    arr[:, :, 2] *= bb
+                    
+                    if abs(p_gamma - 1.0) > 0.02:
+                        # Standard simple gamma correction: V_out = V_in ** (1/gamma)
+                        arr = 255.0 * np.power((arr / 255.0).clip(0, 1), 1.0 / p_gamma)
+                        
+                    np.clip(arr, 0, 255, out=arr)
+                    seg_native = Image.fromarray(arr.astype(np.uint8))
+                    
                 paste_x = mon.os_x - min_os_x
                 paste_y = mon.os_y - min_os_y
                 master_canvas.paste(seg_native, (paste_x, paste_y))
@@ -1485,10 +1739,10 @@ class OmniScreenForgeApp:
             if not output_path.lower().endswith(valid_img_exts): 
                 output_path += ".png"
             master_canvas.save(output_path)
-            messagebox.showinfo("Success", f"Image saved: {output_path}")
+            messagebox.showinfo("Success", f"Raster completed successfully:\n{output_path}")
             
         except Exception as e:
-            messagebox.showerror("Image Error", f"An error occurred: {e}")
+            messagebox.showerror("Raster Error", f"Failed to generate composite image.\n{str(e)}")
 
 if __name__ == "__main__":
     try:

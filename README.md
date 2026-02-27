@@ -1,5 +1,5 @@
 # OmniScreen Forge
-**Version:** 1.1.0  
+**Version:** 2.1
 
 ## Installation & Requirements
 1. **Python 3**: Ensure [Python 3.9+](https://www.python.org/downloads/) is installed and added to your System PATH.
@@ -15,15 +15,17 @@ When you have a 32-inch 4K monitor next to a 24-inch 1080p monitor, simply telli
 - **Visual Desktop Layout Matrix**: A 2D canvas where you can freely drag around representations of your monitors to match their physical real-world positions. You can also drag their corners to adjust their physical sizes.
 - **Dynamic PPI Calculation Engine**: The program calculates the exact Pixels Per Inch (PPI) for every assigned screen, establishing a master scaling baseline to equalize the video/image.
 - **FFmpeg & PIL Subsystems**: It seamlessly maps videos using an asynchronous `subprocess` FFmpeg routine ensuring flawless frame-rates, and processes static images natively using Python's Pillow imaging library.
-- **Visual Colorimeter & Advanced Grading**: Generate a mathematical gradient calibrator to visually match RGB profiles across mismatched monitors, perfectly syncing their output via FFmpeg `colorchannelmixer` matrices and `ImageEnhance` operations. Includes advanced control over Gamma curve bending, Brightness offsets, and Saturation.
+- **Visual Colorimeter & Advanced Grading**: Generate mathematical gradient calibrators or cyberpunk grids to visually match RGB profiles across mismatched monitors. Sync their output via FFmpeg `colorchannelmixer` matrices and `ImageEnhance` operations. Includes advanced control over Gamma curve bending, Brightness offsets, and Saturation.
+- **Live Interactive Previews**: An integrated system that spawns native, perfectly scaled windows on every monitor to dynamically preview color grading and brightness adjustments in real-time, eliminating the need to render test images.
 - **Automated Parameter Extraction**: It automatically pulls the structural native resolution and X/Y OS coordinates directly from `screeninfo` without user intervention.
+- **Smart Wallpaper Detection**: Booting the application automatically queries the Windows OS via `ctypes` to instantly detect and load your active Desktop Wallpaper into the preview engine for fast, in-context color calibration.
 - **State Persistence**: Remembers your designated input/output media locations and interface presets entirely via standard JSON loading.
 - **Asynchronous Rendering**: An integrated processing queue ensures UI responsiveness even while massive 4K video streams are re-transcoded in the background.
 
 ## Video Tutorial
 Before and after video- showcasing the before and after of various backgrounds, on my personal setup... tge whole reason I created this in the first place!
 
-https://youtu.be/CO36Bm-emIM
+[![OmniScreen Forge Video Tutorial](https://img.youtube.com/vi/CO36Bm-emIM/maxresdefault.jpg)](https://youtu.be/CO36Bm-emIM "Click to Watch!")
 
 ## Basic Usage Guide
 1. **Load Media**: Select an MP4, GIF, JPEG, or PNG file utilizing the "Browse Media..." field.
